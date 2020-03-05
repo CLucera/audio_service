@@ -10,6 +10,8 @@
 // submit a pull request. We have an open discussion over at issue #10 about
 // all things iOS if you'd like to discuss approaches or ask for input. Thank
 // you for your support!
+//
+// Modified by DL Solutions (2020-03-05)
 
 @implementation AudioServicePlugin
 
@@ -25,6 +27,7 @@ static NSNumber *position = nil;
 static NSNumber *updateTime = nil;
 static NSNumber *speed = nil;
 static MPMediaItemArtwork* artwork = nil;
+static NSURLSessionDataTask* artworkImagetDataTask = nil;
 
 + (void)registerWithRegistrar:(NSObject<FlutterPluginRegistrar>*)registrar {
   @synchronized(self) {
@@ -254,14 +257,24 @@ static MPMediaItemArtwork* artwork = nil;
     mediaItem = call.arguments;
     NSString* artUri = mediaItem[@"artUri"];
     if (artUri != [NSNull null]) {
+      artwork = nil;
       NSURL* artUrl = [[NSURL alloc] initWithString:artUri];
-      NSData* artData = [NSData dataWithContentsOfURL:artUrl];
-      UIImage* artImage = [UIImage imageWithData:artData];
-      artwork = [[MPMediaItemArtwork alloc]
-        initWithBoundsSize:artImage.size
-            requestHandler:^UIImage* _Nonnull(CGSize size){
-              return artImage;
-            }];
+      if (artworkImagetDataTask != nil) {
+        [artworkImagetDataTask cancel];
+        artworkImagetDataTask = nil;
+      }
+      artworkImagetDataTask = [
+        [NSURLSession sharedSession]
+        dataTaskWithURL:artUrl completionHandler:^(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error) {
+                UIImage* artImage = [UIImage imageWithData:data];
+                artwork = [[MPMediaItemArtwork alloc]
+                  initWithBoundsSize:artImage.size
+                      requestHandler:^UIImage* _Nonnull(CGSize size){
+                        return artImage;
+                }];
+              [self updateNowPlayingInfo];
+        }];
+      [artworkImagetDataTask resume];
     } else {
       artwork = nil;
     }
